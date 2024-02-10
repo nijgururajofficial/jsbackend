@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -340,7 +341,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     {
       $lookup: {
         from: "subscriptions",
-        local: "_id",
+        localField: "_id",
         foreignField: "channel",
         as: "subscribers",
       },
@@ -349,7 +350,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     {
       $lookup: {
         from: "subscriptions",
-        local: "_id",
+        localField: "_id",
         foreignField: "subscriber",
         as: "subscribedTo",
       },
@@ -362,7 +363,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
           $size: "$subscribers",
         },
         // Count the number of channels subscribed to by the user
-        channerSubscribedToCount: {
+        channelsSubscribedToCount: {
           $size: "$subscribedTo",
         },
         // Check if the current user is subscribed to the channel and assign a boolean value
@@ -381,7 +382,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         fullName: 1,
         username: 1,
         subscribersCount: 1,
-        channerSubscribedToCount: 1,
+        channelsSubscribedToCount: 1,
         isSubscribed: 1,
         avatar: 1,
         coverImage: 1,
@@ -400,6 +401,69 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
+// Define an asynchronous route handler using asyncHandler
+const getWatchHistory = asyncHandler(async (req, res) => {
+  // Use the aggregate function on the User collection
+  const user = await User.aggregate([
+    // Stage 1: Match documents with the provided user ID
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req._id),
+      },
+    },
+    // Stage 2: Lookup the 'videos' collection to get the user's watch history
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        // Sub-pipeline to further process the videos in the watch history
+        pipeline: [
+          // Sub-stage 1: Lookup the 'users' collection to get information about the video owner
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              // Sub-pipeline to project specific fields from the 'users' collection
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    avatar: 1,
+                    username: 1,
+                  },
+                },
+              ],
+            },
+          },
+          // Sub-stage 2: Add fields to include the video owner in the video documents
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  // Return a JSON response with the watch history and a success message
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
+});
+
 export {
   registerUser,
   loginUser,
@@ -411,4 +475,5 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getWatchHistory,
 };
