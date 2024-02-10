@@ -4,7 +4,6 @@ import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
-import { application } from "express";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -329,12 +328,15 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     throw new ApiError(400, "username is missing");
   }
 
+  // Use the aggregate function on the User collection
   const channel = await User.aggregate([
+    // Stage 1: Match documents with the provided username (case-insensitive)
     {
       $match: {
         username: username?.toLowerCase(),
       },
     },
+    // Stage 2: Lookup the 'subscriptions' collection to get the subscribers of the channel
     {
       $lookup: {
         from: "subscriptions",
@@ -343,6 +345,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         as: "subscribers",
       },
     },
+    // Stage 3: Lookup the 'subscriptions' collection to get the channels subscribed to by the user
     {
       $lookup: {
         from: "subscriptions",
@@ -351,23 +354,28 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         as: "subscribedTo",
       },
     },
+    // Stage 4: Add fields to the documents using the $addFields stage
     {
       $addFields: {
+        // Count the number of subscribers for the channel
         subscribersCount: {
           $size: "$subscribers",
         },
+        // Count the number of channels subscribed to by the user
         channerSubscribedToCount: {
           $size: "$subscribedTo",
         },
+        // Check if the current user is subscribed to the channel and assign a boolean value
         isSubscribed: {
           $cond: {
-            if: { $in: [req.user?._id, "$subscribers.subsciber"] },
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
             then: true,
             else: false,
           },
         },
       },
     },
+    // Stage 5: Project only the desired fields in the final result
     {
       $project: {
         fullName: 1,
