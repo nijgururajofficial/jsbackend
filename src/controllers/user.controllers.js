@@ -277,7 +277,7 @@ const updateAccoundDetails = asyncHandler(async (req, res) => {
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
-  const avatarLocalPath = req.files;
+  const avatarLocalPath = req.file?.path;
 
   if (!avatarLocalPath) {
     throw new ApiError(400, "avatar file is missing");
@@ -299,7 +299,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
-  const coverImageLocalPath = req.files;
+  const coverImageLocalPath = req.file?.path;
 
   if (!coverImageLocalPath) {
     throw new ApiError(400, "cover image file is missing");
@@ -401,14 +401,13 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
-// Define an asynchronous route handler using asyncHandler
 const getWatchHistory = asyncHandler(async (req, res) => {
   // Use the aggregate function on the User collection
   const user = await User.aggregate([
     // Stage 1: Match documents with the provided user ID
     {
       $match: {
-        _id: new mongoose.Types.ObjectId(req._id),
+        _id: new mongoose.Types.ObjectId(req.user._id),
       },
     },
     // Stage 2: Lookup the 'videos' collection to get the user's watch history
